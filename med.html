@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>🏥 MediTrack Burundi - Gestion Maladies Chroniques</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --primary-color: #667eea;
+            --success: #28a745;
+            --danger: #dc3545;
+            --warning: #ffc107;
+            --info: #17a2b8;
+            --dark: #1a1a2e;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; min-height: 100vh; }
+        .auth-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; }
+        .auth-card { background: white; border-radius: 20px; padding: 40px; width: 100%; max-width: 450px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: fadeIn 0.5s ease; }
+        .auth-card .logo { text-align: center; font-size: 64px; margin-bottom: 20px; }
+        .auth-card h2 { text-align: center; margin-bottom: 30px; color: #333; }
+        .auth-card .form-group { margin-bottom: 20px; }
+        .auth-card input, .auth-card select { width: 100%; padding: 12px 15px; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; }
+        .auth-card button { width: 100%; padding: 12px; font-size: 16px; margin-top: 10px; }
+        .auth-link { text-align: center; margin-top: 20px; color: #666; cursor: pointer; }
+        .auth-link span { color: #667eea; font-weight: bold; }
+        .app-container { display: flex; min-height: 100vh; }
+        .sidebar { width: 280px; background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%); color: white; position: fixed; height: 100vh; overflow-y: auto; transition: all 0.3s; z-index: 1000; box-shadow: 2px 0 20px rgba(0,0,0,0.1); }
+        .menu-toggle { display: none; position: fixed; top: 15px; left: 15px; z-index: 1001; background: var(--primary); border: none; width: 45px; height: 45px; border-radius: 12px; color: white; font-size: 24px; cursor: pointer; }
+        .sidebar-header { padding: 25px 20px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .sidebar-header .logo { font-size: 48px; margin-bottom: 10px; }
+        .sidebar-header h2 { font-size: 1.3rem; }
+        .user-profile-mini { padding: 15px 20px; background: rgba(255,255,255,0.1); margin: 15px; border-radius: 12px; display: flex; align-items: center; gap: 12px; }
+        .user-avatar-mini { width: 45px; height: 45px; background: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+        .user-info-mini h4 { font-size: 14px; margin-bottom: 3px; }
+        .user-info-mini p { font-size: 11px; opacity: 0.7; }
+        .nav-menu { list-style: none; padding: 0; margin-bottom: 20px; }
+        .nav-item { margin: 5px 15px; border-radius: 12px; transition: all 0.3s; cursor: pointer; }
+        .nav-item:hover { background: rgba(255,255,255,0.1); }
+        .nav-item.active { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .nav-link { display: flex; align-items: center; padding: 12px 20px; color: white; gap: 12px; }
+        .nav-icon { font-size: 20px; min-width: 24px; text-align: center; }
+        .nav-text { flex: 1; font-size: 14px; }
+        .nav-badge { background: var(--danger); border-radius: 20px; padding: 2px 8px; font-size: 10px; font-weight: bold; }
+        .main-content { flex: 1; margin-left: 280px; padding: 20px; transition: all 0.3s; }
+        .top-bar { background: white; border-radius: 15px; padding: 15px 25px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .page-title { font-size: 24px; font-weight: 600; color: #333; }
+        .user-actions { display: flex; align-items: center; gap: 15px; }
+        .logout-btn { background: var(--danger); padding: 8px 16px; border-radius: 8px; color: white; border: none; cursor: pointer; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 25px; }
+        .stat-card { background: white; border-radius: 15px; padding: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.05); transition: transform 0.3s; cursor: pointer; }
+        .stat-card:hover { transform: translateY(-3px); }
+        .stat-value { font-size: 28px; font-weight: bold; color: #333; }
+        .section-card { background: white; border-radius: 15px; padding: 20px; margin-bottom: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); animation: fadeIn 0.3s ease; }
+        .section-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; color: #333; border-left: 4px solid #667eea; padding-left: 15px; }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; color: #555; font-size: 13px; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+        button { background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: all 0.3s; }
+        button:hover { transform: translateY(-2px); }
+        .btn-danger { background: #dc3545; }
+        .btn-success { background: #28a745; }
+        .btn-info { background: #17a2b8; }
+        .btn-warning { background: #ffc107; color: #333; }
+        .table-responsive { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; font-weight: 600; }
+        .alert { padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; animation: fadeIn 0.3s; }
+        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .alert-danger { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .alert-warning { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        .alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .chart-container { height: 300px; position: relative; }
+        .filter-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: flex-end; }
+        .filter-bar .form-group { margin-bottom: 0; flex: 1; min-width: 150px; }
+        .export-buttons { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        #map { height: 400px; border-radius: 15px; margin-bottom: 20px; }
+        .gps-status { display: inline-block; padding: 5px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+        .gps-active { background: #28a745; color: white; }
+        .gps-inactive { background: #dc3545; color: white; }
+        .role-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; }
+        .role-admin { background: #dc3545; color: white; }
+        .role-medecin { background: #28a745; color: white; }
+        .role-fosa { background: #17a2b8; color: white; }
+        .role-patient { background: #6c757d; color: white; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center; }
+        .modal-content { background: white; border-radius: 15px; padding: 30px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; }
+        .symptom-tag { display: inline-block; background: #e9ecef; padding: 5px 10px; margin: 5px; border-radius: 20px; cursor: pointer; transition: all 0.3s; }
+        .symptom-tag.selected { background: #667eea; color: white; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 768px) { .menu-toggle { display: block; } .sidebar { transform: translateX(-100%); width: 280px; } .sidebar.open { transform: translateX(0); } .main-content { margin-left: 0; padding: 70px 15px 15px 15px; } .stats-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script>
+        // ============ PROVINCES DU BURUNDI ============
+        const PROVINCES_BURUNDI = ['Bubanza', 'Bujumbura Mairie', 'Bujumbura Rural', 'Bururi', 'Cankuzo', 'Cibitoke', 'Gitega', 'Karuzi', 'Kayanza', 'Kirundo', 'Makamba', 'Muramvya', 'Muyinga', 'Mwaro', 'Ngozi', 'Rumonge', 'Rutana', 'Ruyigi'];
+        const MALADIES_LIST = ['Diabète type 1', 'Diabète type 2', 'Hypertension artérielle', 'Asthme', 'BPCO', 'Insuffisance rénale', 'Cardiopathie', 'VIH/SIDA', 'Hépatite B/C', 'Épilepsie'];
+        const MEDICAMENTS = ['Metformine', 'Insuline', 'Lisinopril', 'Amlodipine', 'Salbutamol', 'Atorvastatine', 'Aspirine', 'Paracétamol', 'Amoxicilline'];
+
+        let users = [
+            { id: 1, nom: 'Admin', prenom: 'System', email: 'admin@meditrack.com', password: 'admin123', role: 'admin', telephone: '0102030405', province: 'Bujumbura Mairie' },
+            { id: 2, nom: 'Dupont', prenom: 'Jean', email: 'jean.dupont@email.com', password: 'pass123', role: 'patient', telephone: '0612345678', province: 'Bujumbura Mairie' },
+            { id: 3, nom: 'Ndayishimiye', prenom: 'Claude', email: 'claude@email.com', password: 'pass123', role: 'patient', telephone: '0687654321', province: 'Gitega' },
+            { id: 4, nom: 'Lambert', prenom: 'Marie', email: 'marie.lambert@email.com', password: 'pass123', role: 'medecin', telephone: '0698765432', province: 'Bujumbura Mairie' },
+            { id: 5, nom: 'Nkurunziza', prenom: 'Paul', email: 'paul@email.com', password: 'pass123', role: 'fosa', telephone: '0756789012', province: 'Ngozi' }
+        ];
+
+        let currentUser = null;
+        let gpsActive = false;
+        let currentPosition = null;
+        let map = null;
+        let currentReportData = [];
+        let currentReportFilters = {};
+        let selectedSymptomsList = [];
+
+        // Données principales
+        let patientsMalades = [
+            { id: 1, nom: 'Dupont', prenom: 'Jean', maladie: 'Diabète type 2', dateDiagnostic: '2023-01-15', province: 'Bujumbura Mairie', commune: 'Mukaza', stade: 'Modéré', traitement: 'Metformine 500mg', derniereConsultation: '2024-05-10', prochainRdv: '2024-06-10', age: 58, sexe: 'M', telephone: '0612345678' },
+            { id: 2, nom: 'Ndayishimiye', prenom: 'Claude', maladie: 'Hypertension artérielle', dateDiagnostic: '2023-03-20', province: 'Gitega', commune: 'Gitega', stade: 'Léger', traitement: 'Lisinopril 10mg', derniereConsultation: '2024-05-15', prochainRdv: '2024-06-15', age: 45, sexe: 'M', telephone: '0687654321' },
+            { id: 3, nom: 'Manirakiza', prenom: 'Jeanne', maladie: 'Asthme', dateDiagnostic: '2023-06-10', province: 'Kayanza', commune: 'Kayanza', stade: 'Modéré', traitement: 'Salbutamol', derniereConsultation: '2024-05-05', prochainRdv: '2024-06-05', age: 32, sexe: 'F', telephone: '0734567890' },
+            { id: 4, nom: 'Hakizimana', prenom: 'Pierre', maladie: 'Diabète type 1', dateDiagnostic: '2022-11-20', province: 'Ngozi', commune: 'Ngozi', stade: 'Sévère', traitement: 'Insuline', derniereConsultation: '2024-05-20', prochainRdv: '2024-06-20', age: 25, sexe: 'M', telephone: '0745678901' },
+            { id: 5, nom: 'Irankunda', prenom: 'Marie', maladie: 'Insuffisance rénale', dateDiagnostic: '2023-08-15', province: 'Bururi', commune: 'Bururi', stade: 'Critique', traitement: 'Dialyse', derniereConsultation: '2024-05-18', prochainRdv: '2024-06-18', age: 62, sexe: 'F', telephone: '0756789012' }
+        ];
+
+        let appData = {
+            symptomes: [],
+            repas: [],
+            mesures: [],
+            traitements: [],
+            rendez_vous: [],
+            iotDevices: [],
+            consultations: []
+        };
+
+        // Données KoboToolbox
+        let kobotoolboxData = {
+            projects: [],
+            submissions: [],
+            forms: [
+                { id: 1, name: 'Enquête sanitaire Burundi', description: 'Collecte des données sanitaires', fields: ['province', 'commune', 'maladie', 'age', 'sexe', 'symptomes', 'traitement'], versions: ['v1.0', 'v2.0'] },
+                { id: 2, name: 'Suivi patients chroniques', description: 'Suivi des maladies chroniques', fields: ['patient_id', 'date', 'tension', 'glycemie', 'traitement', 'observance'], versions: ['v1.0'] },
+                { id: 3, name: 'Rapport FOSA', description: 'Rapports des agents de santé', fields: ['province', 'nombre_visites', 'vaccinations', 'depistages', 'mortalite'], versions: ['v1.0'] },
+                { id: 4, name: 'Campagne de sensibilisation', description: 'Données des campagnes', fields: ['province', 'lieu', 'participants', 'themes', 'duree'], versions: ['v1.0'] }
+            ],
+            collectedData: [],
+            apiKeys: [{ key: 'kobo_live_key_123', name: 'Production API', active: true }],
+            syncStatus: { lastSync: null, pendingSync: 0 }
+        };
+
+        // Générer des données KoboToolbox
+        for (let i = 0; i < 100; i++) {
+            kobotoolboxData.collectedData.push({
+                id: i + 1,
+                submissionId: `SUB-${String(i+1).padStart(5,'0')}`,
+                province: PROVINCES_BURUNDI[Math.floor(Math.random() * PROVINCES_BURUNDI.length)],
+                commune: `Commune ${Math.floor(Math.random() * 20) + 1}`,
+                maladie: MALADIES_LIST[Math.floor(Math.random() * MALADIES_LIST.length)],
+                age: 20 + Math.floor(Math.random() * 60),
+                sexe: Math.random() > 0.5 ? 'M' : 'F',
+                symptomes: ['Fièvre', 'Toux', 'Fatigue', 'Douleur thoracique', 'Essoufflement', 'Nausées'][Math.floor(Math.random() * 6)],
+                traitement: MEDICAMENTS[Math.floor(Math.random() * MEDICAMENTS.length)],
+                dateCollecte: new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                agent: `Agent ${Math.floor(Math.random() * 15) + 1}`,
+                latitude: -3.5 + (Math.random() * 1.5),
+                longitude: 29.0 + (Math.random() * 1.5),
+                verified: Math.random() > 0.3,
+                formId: Math.floor(Math.random() * 4) + 1
+            });
+        }
+
+        // Initialiser données
+        function initData() {
+            for (let i = 0; i < 50; i++) {
+                const date = new Date();
+                date.setDate(date.getDate() - Math.floor(Math.random() * 60));
+                appData.symptomes.push({
+                    id: i+1, patient_id: (i % 5) + 1, date: date.toISOString().split('T')[0],
+                    symptomes: ['Maux de tête', 'Fatigue', 'Fièvre', 'Toux'][Math.floor(Math.random()*4)],
+                    intensite: Math.floor(Math.random() * 5) + 1, duree: `${Math.floor(Math.random()*24)+1}h`
+                });
+                appData.mesures.push({
+                    id: i+1, patient_id: (i % 5) + 1, province: PROVINCES_BURUNDI[i % PROVINCES_BURUNDI.length],
+                    date: date.toISOString().split('T')[0], tension_systolique: 110 + Math.floor(Math.random()*40),
+                    tension_diastolique: 70 + Math.floor(Math.random()*25), glycemie: (0.9 + Math.random()*0.8).toFixed(2),
+                    poids: (55 + Math.random()*30).toFixed(1), temperature: (36 + Math.random()*2).toFixed(1)
+                });
+                appData.traitements.push({
+                    id: i+1, patient_id: (i % 5) + 1, nom: MEDICAMENTS[i % MEDICAMENTS.length],
+                    dosage: `${Math.floor(Math.random()*500)+100}mg`, frequence: `${Math.floor(Math.random()*3)+1}x/jour`,
+                    actif: true, date_debut: date.toISOString().split('T')[0]
+                });
+            }
+        }
+
+        function getGPSPosition() {
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => { currentPosition = { lat: position.coords.latitude, lng: position.coords.longitude }; gpsActive = true; updateGPSToast(); if(map && currentPosition) { map.setView([currentPosition.lat, currentPosition.lng], 13); L.marker([currentPosition.lat, currentPosition.lng]).bindPopup('📍 Votre position').addTo(map).openPopup(); } },
+                    (error) => { gpsActive = false; updateGPSToast(); }
+                );
+            } else { gpsActive = false; updateGPSToast(); }
+        }
+
+        function updateGPSToast() {
+            const toast = document.getElementById('gpsToast');
+            if(toast) { toast.innerHTML = gpsActive ? '✅ GPS Activé' : '⚠️ GPS Désactivé'; toast.className = gpsActive ? 'gps-status gps-active' : 'gps-status gps-inactive'; }
+        }
+
+        function initMap() { if(map) map.remove(); map = L.map('map').setView([-3.3667, 29.3667], 8); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map); }
+
+        window.PROVINCE_COORDS = {
+            'Bujumbura Mairie': [-3.3822, 29.3644], 'Gitega': [-3.4264, 29.9308], 'Ngozi': [-2.9075, 29.8275], 'Kayanza': [-2.9222, 29.6292], 'Muramvya': [-3.2683, 29.6078], 'Muyinga': [-2.8453, 30.3414], 'Bururi': [-3.9489, 29.6239]
+        };
+
+        function filterByProvince(province) { 
+            const filterInput = document.getElementById('reportProvinceFilter');
+            if(filterInput) filterInput.value = province; 
+            generateAdvancedReport(); 
+        }
+
+        // ============ AUTHENTIFICATION ============
+        function showLoginPage() {
+            document.getElementById('app').innerHTML = `<div class="auth-container"><div class="auth-card"><div class="logo">🏥</div><h2>MediTrack Burundi</h2><div class="form-group"><input type="email" id="loginEmail" placeholder="Email" value="admin@meditrack.com"></div><div class="form-group"><input type="password" id="loginPassword" placeholder="Mot de passe" value="admin123"></div><button onclick="login()">Se connecter</button><div class="auth-link" onclick="showRegisterPage()">Pas encore de compte ? <span>S'inscrire</span></div></div></div>`;
+        }
+
+        function showRegisterPage() {
+            document.getElementById('app').innerHTML = `<div class="auth-container"><div class="auth-card"><div class="logo">🏥</div><h2>Inscription</h2><div class="form-row"><div class="form-group"><input type="text" id="regNom" placeholder="Nom"></div><div class="form-group"><input type="text" id="regPrenom" placeholder="Prénom"></div></div><div class="form-group"><input type="email" id="regEmail" placeholder="Email"></div><div class="form-group"><input type="tel" id="regTelephone" placeholder="Téléphone"></div><div class="form-group"><input type="password" id="regPassword" placeholder="Mot de passe"></div><div class="form-group"><select id="regProvince">${PROVINCES_BURUNDI.map(p=>`<option value="${p}">${p}</option>`).join('')}</select></div><div class="form-group"><select id="regRole"><option value="patient">Patient</option><option value="fosa">Agent FOSA</option></select></div><button onclick="register()">S'inscrire</button><div class="auth-link" onclick="showLoginPage()">Déjà un compte ? <span>Se connecter</span></div></div></div>`;
+        }
+
+        function login() { const email = document.getElementById('loginEmail').value, password = document.getElementById('loginPassword').value, user = users.find(u=>u.email===email && u.password===password); if(user) { currentUser=user; localStorage.setItem('currentUser',JSON.stringify(user)); initApp(); } else alert('Email ou mot de passe incorrect'); }
+        function register() { const newUser={id:users.length+1, nom:document.getElementById('regNom').value, prenom:document.getElementById('regPrenom').value, email:document.getElementById('regEmail').value, telephone:document.getElementById('regTelephone').value, password:document.getElementById('regPassword').value, province:document.getElementById('regProvince').value, role:document.getElementById('regRole').value}; users.push(newUser); alert('Inscription réussie!'); showLoginPage(); }
+        function logout() { currentUser=null; localStorage.removeItem('currentUser'); showLoginPage(); }
+
+        function initApp() {
+            const savedUser = localStorage.getItem('currentUser');
+            if(savedUser) { currentUser=JSON.parse(savedUser); const userExists=users.find(u=>u.id===currentUser.id); if(!userExists) { logout(); return; } currentUser=userExists; }
+            if(!currentUser) { showLoginPage(); return; }
+            initData();
+            renderMainApp();
+        }
+
+        function renderMainApp() {
+            const userPermissions = currentUser.role === 'admin' ? ['dashboard','patients','symptoms','nutrition','measures','treatments','iot','telemedecine','appointments','reports','predictive','kobotoolbox','map','users','profile'] :
+                                currentUser.role === 'medecin' ? ['dashboard','patients','symptoms','nutrition','measures','treatments','iot','telemedecine','appointments','reports','predictive','kobotoolbox','map','profile'] :
+                                currentUser.role === 'fosa' ? ['dashboard','patients','symptoms','nutrition','measures','treatments','appointments','reports','kobotoolbox','map','profile'] :
+                                ['dashboard','symptoms','nutrition','measures','treatments','appointments','reports','profile'];
+            
+            document.getElementById('app').innerHTML = `
+                <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+                <div class="app-container"><aside class="sidebar" id="sidebar">
+                    <div class="sidebar-header"><div class="logo">🏥</div><h2>MediTrack Burundi</h2><p style="font-size:11px;opacity:0.7;">Santé connectée</p></div>
+                    <div class="user-profile-mini"><div class="user-avatar-mini">${currentUser.role==='admin'?'👑':currentUser.role==='medecin'?'👨‍⚕️':currentUser.role==='fosa'?'👩‍⚕️':'👤'}</div><div class="user-info-mini"><h4>${currentUser.prenom} ${currentUser.nom}</h4><p>${currentUser.role==='admin'?'Admin':currentUser.role==='medecin'?'Médecin':currentUser.role==='fosa'?'Agent FOSA':'Patient'} - ${currentUser.province||'N/A'}</p></div></div>
+                    <div style="padding:0 15px;margin-bottom:15px;"><div id="gpsToast" class="gps-status gps-inactive">⚠️ GPS Désactivé</div><button onclick="getGPSPosition()" style="width:100%;margin-top:10px;background:#28a745;">📍 Activer GPS</button></div>
+                    <ul class="nav-menu">${userPermissions.map(p=>`<li class="nav-item" data-page="${p}"><div class="nav-link"><span class="nav-icon">${p==='dashboard'?'📊':p==='patients'?'👥':p==='symptoms'?'🤒':p==='nutrition'?'🥗':p==='measures'?'📈':p==='treatments'?'💊':p==='iot'?'📡':p==='telemedecine'?'🎥':p==='appointments'?'📅':p==='reports'?'📄':p==='predictive'?'🤖':p==='kobotoolbox'?'📋':p==='map'?'🗺️':p==='users'?'👥':'⚙️'}</span><span class="nav-text">${p==='dashboard'?'Tableau de bord':p==='patients'?'Patients Chroniques':p==='symptoms'?'Symptômes':p==='nutrition'?'Nutrition':p==='measures'?'Mesures':p==='treatments'?'Traitements':p==='iot'?'Objets Connectés':p==='telemedecine'?'Télémédecine':p==='appointments'?'Rendez-vous':p==='reports'?'Rapports':p==='predictive'?'Analyse IA':p==='kobotoolbox'?'KOBOTOOLBOX':p==='map'?'Carte Burundi':p==='users'?'Utilisateurs':'Profil'}</span></div></li>`).join('')}</ul>
+                </aside><main class="main-content"><div class="top-bar"><div class="page-title" id="pageTitle">Tableau de bord</div><div class="user-actions"><button class="logout-btn" onclick="logout()">Déconnexion</button></div></div><div id="pageContent"></div></main></div>`;
+            document.querySelectorAll('.nav-item').forEach(item=>{item.addEventListener('click',()=>{const page=item.dataset.page; if(page) showPage(page);});});
+            window.toggleSidebar = () => document.getElementById('sidebar').classList.toggle('open');
+            window.getGPSPosition = getGPSPosition;
+            showPage('dashboard');
+        }
+
+        // ============ PAGE DASHBOARD ============
+        function renderDashboard() {
+            return `<div class="stats-grid"><div class="stat-card" onclick="showPage('patients')"><div><h4>Patients chroniques</h4><div class="stat-value">${patientsMalades.length}</div></div><div>👥</div></div>
+            <div class="stat-card" onclick="showPage('kobotoolbox')"><div><h4>Données Kobo</h4><div class="stat-value">${kobotoolboxData.collectedData.length}</div></div><div>📋</div></div>
+            <div class="stat-card"><div><h4>Provinces couvertes</h4><div class="stat-value">${PROVINCES_BURUNDI.length}</div></div><div>🗺️</div></div>
+            <div class="stat-card"><div><h4>GPS Status</h4><div class="stat-value">${gpsActive?'✅':'❌'}</div></div><div>📍</div></div></div>
+            <div class="section-card"><div class="section-title">📊 Patients par province</div><canvas id="provinceChart" height="200"></canvas></div>
+            <div class="section-card"><div class="section-title">📈 Évolution des mesures (30 derniers jours)</div><canvas id="evolutionChart" height="200"></canvas></div>
+            <div class="section-card"><div class="section-title">⚠️ Alertes récentes</div>${renderAlertes()}</div>`;
+        }
+
+        function renderAlertes() {
+            const alertes = []; const recentMeasures = appData.mesures.slice(0,20);
+            recentMeasures.forEach(m=>{ if(m.tension_systolique>=140) alertes.push({type:'warning',message:`Patient ${m.patient_id} - Tension élevée: ${m.tension_systolique}/${m.tension_diastolique}`}); if(parseFloat(m.glycemie)>=1.26) alertes.push({type:'danger',message:`Patient ${m.patient_id} - Glycémie élevée: ${m.glycemie} g/L`}); });
+            if(alertes.length===0) return `<div class="alert alert-success">✅ Aucune alerte récente</div>`;
+            return alertes.map(a=>`<div class="alert alert-${a.type}">⚠️ ${a.message}</div>`).join('');
+        }
+
+        // ============ PATIENTS ============
+        function renderPatients() {
+            return `<div class="section-card"><div class="section-title">👥 Gestion des patients</div>
+            <button onclick="showAddPatientModal()" style="margin-bottom:20px;">➕ Nouveau patient</button>
+            <div class="filter-bar"><div class="form-group"><label>Province</label><select id="patientFilterProvince" onchange="filterPatients()"><option value="">Toutes</option>${PROVINCES_BURUNDI.map(p=>`<option value="${p}">${p}</option>`).join('')}</select></div>
+            <div class="form-group"><label>Maladie</label><select id="patientFilterMaladie" onchange="filterPatients()"><option value="">Toutes</option>${MALADIES_LIST.map(m=>`<option value="${m}">${m}</option>`).join('')}</select></div>
+            <div class="form-group"><label>Stade</label><select id="patientFilterStade" onchange="filterPatients()"><option value="">Tous</option><option>Léger</option><option>Modéré</option><option>Sévère</option><option>Critique</option></select></div>
+            <div class="form-group"><label>Recherche</label><input type="text" id="patientFilterSearch" placeholder="Nom, téléphone..." onkeyup="filterPatients()"></div></div>
+            <div class="table-responsive"><table id="patientsTable"><thead><tr><th>Nom</th><th>Maladie</th><th>Province</th><th>Commune</th><th>Âge</th><th>Stade</th><th>Traitement</th><th>Prochain RDV</th><th>Actions</th></tr></thead><tbody id="patientsTableBody"></tbody></table></div></div>`;
+        }
+
+        function filterPatients() {
+            const province = document.getElementById('patientFilterProvince')?.value;
+            const maladie = document.getElementById('patientFilterMaladie')?.value;
+            const stade = document.getElementById('patientFilterStade')?.value;
+            const search = document.getElementById('patientFilterSearch')?.value.toLowerCase();
+            let filtered = patientsMalades;
+            if(province) filtered = filtered.filter(p=>p.province===province);
+            if(maladie) filtered = filtered.filter(p=>p.maladie===maladie);
+            if(stade) filtered = filtered.filter(p=>p.stade===stade);
+            if(search) filtered = filtered.filter(p=>p.nom.toLowerCase().includes(search) || p.prenom.toLowerCase().includes(search) || (p.telephone && p.telephone.includes(search)));
+            const tbody = document.getElementById('patientsTableBody');
+            if(tbody) tbody.innerHTML = filtered.map(p=>`<tr><td>${p.prenom} ${p.nom}</td><td>${p.maladie}</td><td>${p.province}</td><td>${p.commune||'N/A'}</td><td>${p.age||'N/A'}</td><td><span class="role-badge" style="background:${p.stade==='Critique'?'#dc3545':p.stade==='Sévère'?'#fd7e14':p.stade==='Modéré'?'#ffc107':'#28a745'}">${p.stade}</span></td><td>${p.traitement}</td><td>${p.prochainRdv||'N/A'}</td><td><button onclick="editPatient(${p.id})" style="background:#17a2b8;padding:5px 10px;">✏️</button> <button onclick="deletePatient(${p.id})" style="background:#dc3545;padding:5px 10px;">🗑️</button></td></tr>`).join('');
+        }
+
+        function showAddPatientModal() {
+            const modalHtml = `<div id="patientModal" class="modal" style="display:flex;"><div class="modal-content"><h3>➕ Nouveau patient</h3>
+            <div class="form-row"><div class="form-group"><label>Nom</label><input type="text" id="newPatientNom"></div><div class="form-group"><label>Prénom</label><input type="text" id="newPatientPrenom"></div></div>
+            <div class="form-row"><div class="form-group"><label>Maladie</label><select id="newPatientMaladie">${MALADIES_LIST.map(m=>`<option>${m}</option>`).join('')}</select></div><div class="form-group"><label>Province</label><select id="newPatientProvince">${PROVINCES_BURUNDI.map(p=>`<option>${p}</option>`).join('')}</select></div></div>
+            <div class="form-row"><div class="form-group"><label>Commune</label><input type="text" id="newPatientCommune"></div><div class="form-group"><label>Âge</label><input type="number" id="newPatientAge"></div></div>
+            <div class="form-row"><div class="form-group"><label>Sexe</label><select id="newPatientSexe"><option>M</option><option>F</option></select></div><div class="form-group"><label>Téléphone</label><input type="tel" id="newPatientTelephone"></div></div>
+            <div class="form-row"><div class="form-group"><label>Stade</label><select id="newPatientStade"><option>Léger</option><option>Modéré</option><option>Sévère</option><option>Critique</option></select></div><div class="form-group"><label>Traitement</label><input type="text" id="newPatientTraitement"></div></div>
+            <div class="form-row"><div class="form-group"><label>Date diagnostic</label><input type="date" id="newPatientDiagnostic"></div><div class="form-group"><label>Prochain RDV</label><input type="date" id="newPatientRdv"></div></div>
+            <div style="display:flex;gap:10px;margin-top:20px;"><button onclick="addPatient()">💾 Enregistrer</button><button onclick="closeModal()" style="background:#6c757d;">Annuler</button></div></div></div>`;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+
+        function addPatient() {
+            const newPatient = { id: patientsMalades.length+1, nom: document.getElementById('newPatientNom').value, prenom: document.getElementById('newPatientPrenom').value, maladie: document.getElementById('newPatientMaladie').value, province: document.getElementById('newPatientProvince').value, commune: document.getElementById('newPatientCommune').value, age: parseInt(document.getElementById('newPatientAge').value), sexe: document.getElementById('newPatientSexe').value, telephone: document.getElementById('newPatientTelephone').value, stade: document.getElementById('newPatientStade').value, traitement: document.getElementById('newPatientTraitement').value, dateDiagnostic: document.getElementById('newPatientDiagnostic').value, prochainRdv: document.getElementById('newPatientRdv').value, derniereConsultation: new Date().toISOString().split('T')[0] };
+            patientsMalades.push(newPatient); closeModal(); showPage('patients');
+        }
+        function deletePatient(id) { if(confirm('Supprimer ce patient ?')) { patientsMalades = patientsMalades.filter(p=>p.id!==id); showPage('patients'); } }
+        function editPatient(id) { alert(`Édition du patient ${id} - Fonctionnalité en développement`); }
+        function closeModal() { const modal = document.getElementById('patientModal'); if(modal) modal.remove(); }
+
+        // ============ SYMPTÔMES ============
+        function renderSymptoms() {
+            const symptomList = ['Maux de tête', 'Fatigue', 'Vertiges', 'Nausées', 'Douleur thoracique', 'Essoufflement', 'Fièvre', 'Toux', 'Douleur articulaire', 'Palpitations'];
+            return `<div class="section-card"><div class="section-title">🤒 Enregistrer un symptôme</div>
+            <div class="form-row"><div class="form-group"><label>Date</label><input type="date" id="symptomDate" value="${new Date().toISOString().split('T')[0]}"></div>
+            <div class="form-group"><label>Intensité (1-10)</label><input type="range" id="symptomIntensite" min="1" max="10" value="5" oninput="this.nextElementSibling.value=this.value"><span style="margin-left:10px;">5</span></div></div>
+            <div class="form-group"><label>Symptômes (cliquer pour sélectionner)</label><div id="symptomTags">${symptomList.map(s=>`<span class="symptom-tag" onclick="toggleSymptom('${s}')">${s}</span>`).join('')}</div></div>
+            <button onclick="addSymptomRecord()">💾 Enregistrer le symptôme</button></div>
+            <div class="section-card"><div class="section-title">📋 Historique des symptômes</div>
+            <div class="table-responsive"><table><thead><tr><th>Date</th><th>Symptômes</th><th>Intensité</th></tr></thead><tbody id="symptomsTableBody"></tbody></table></div></div>`;
+        }
+
+        function toggleSymptom(symptom) { 
+            const index = selectedSymptomsList.indexOf(symptom); 
+            if(index===-1) selectedSymptomsList.push(symptom); 
+            else selectedSymptomsList.splice(index,1); 
+            document.querySelectorAll('.symptom-tag').forEach(tag=>{
+                if(tag.innerText===symptom) {
+                    if(selectedSymptomsList.includes(symptom)) {
+                        tag.style.background='#667eea';
+                        tag.style.color='white';
+                    } else {
+                        tag.style.background='#e9ecef';
+                        tag.style.color='#333';
+                    }
+                }
+            });
+        }
+        
+        function addSymptomRecord() { 
+            if(selectedSymptomsList.length===0) { alert('Sélectionnez au moins un symptôme'); return; } 
+            appData.symptomes.unshift({ id:Date.now(), patient_id:currentUser.id, date:document.getElementById('symptomDate').value, symptomes:[...selectedSymptomsList], intensite:parseInt(document.getElementById('symptomIntensite').value) }); 
+            selectedSymptomsList=[]; 
+            document.querySelectorAll('.symptom-tag').forEach(t=>{t.style.background='#e9ecef';t.style.color='#333';}); 
+            showPage('symptoms'); 
+        }
+
+        function filterSymptoms() { 
+            const tbody = document.getElementById('symptomsTableBody'); 
+            if(tbody) tbody.innerHTML = appData.symptomes.map(s=>`<tr><td>${s.date}</td><td>${s.symptomes.join(', ')}</td><td>${s.intensite}/10</td></tr>`).join(''); 
+        }
+
+        // ============ NUTRITION ============
+        function renderNutrition() {
+            return `<div class="section-card"><div class="section-title">🥗 Journal alimentaire</div>
+            <div class="form-row"><div class="form-group"><label>Date</label><input type="date" id="mealDate" value="${new Date().toISOString().split('T')[0]}"></div>
+            <div class="form-group"><label>Type de repas</label><select id="mealType"><option>Petit-déjeuner</option><option>Déjeuner</option><option>Dîner</option></select></div></div>
+            <div class="form-group"><label>Aliments consommés</label><textarea id="mealAliments" rows="2"></textarea></div>
+            <button onclick="addMealRecord()">➕ Ajouter le repas</button></div>
+            <div class="section-card"><div class="section-title">📋 Historique des repas</div><div class="table-responsive"><table><thead><tr><th>Date</th><th>Type</th><th>Aliments</th></tr></thead><tbody id="mealsTableBody"></tbody></table></div></div>`;
+        }
+        
+        function addMealRecord() { 
+            const meal = { id:Date.now(), date:document.getElementById('mealDate').value, type:document.getElementById('mealType').value, aliments:document.getElementById('mealAliments').value }; 
+            appData.repas.unshift(meal); 
+            const tbody = document.getElementById('mealsTableBody');
+            if(tbody) tbody.innerHTML = appData.repas.map(m=>`<tr><td>${m.date}</td><td>${m.type}</td><td>${m.aliments}</td></tr>`).join('');
+            showPage('nutrition'); 
+        }
+
+        // ============ MESURES ============
+        function renderMeasures() {
+            return `<div class="section-card"><div class="section-title">📈 Mesures quotidiennes</div>
+            <div class="form-row"><div class="form-group"><label>Tension systolique</label><input type="number" id="sysBP" placeholder="120"></div>
+            <div class="form-group"><label>Tension diastolique</label><input type="number" id="diaBP" placeholder="80"></div>
+            <div class="form-group"><label>Glycémie (g/L)</label><input type="number" step="0.01" id="glucose" placeholder="1.10"></div></div>
+            <button onclick="addMeasureRecord()">✅ Enregistrer les mesures</button></div>
+            <div class="section-card"><div class="section-title">📋 Historique</div><div class="table-responsive"><table><thead><tr><th>Date</th><th>Tension</th><th>Glycémie</th></tr></thead><tbody id="measuresTableBody"></tbody></table></div></div>`;
+        }
+        
+        function addMeasureRecord() { 
+            const measure = { id:Date.now(), date:new Date().toISOString().split('T')[0], tension_systolique:parseInt(document.getElementById('sysBP').value), tension_diastolique:parseInt(document.getElementById('diaBP').value), glycemie:document.getElementById('glucose').value }; 
+            appData.mesures.unshift(measure); 
+            const tbody = document.getElementById('measuresTableBody');
+            if(tbody) tbody.innerHTML = appData.mesures.map(m=>`<tr><td>${m.date}</td><td>${m.tension_systolique}/${m.tension_diastolique}</td><td>${m.glycemie}</td></tr>`).join('');
+            showPage('measures'); 
+        }
+
+        // ============ TRAITEMENTS ============
+        function renderTreatments() {
+            return `<div class="section-card"><div class="section-title">💊 Gestion des traitements</div>
+            <div class="form-row"><div class="form-group"><label>Médicament</label><input type="text" id="treatmentNom"></div>
+            <div class="form-group"><label>Dosage</label><input type="text" id="treatmentDosage"></div>
+            <div class="form-group"><label>Fréquence</label><input type="text" id="treatmentFrequence"></div></div>
+            <button onclick="addTreatmentRecord()">➕ Ajouter le traitement</button></div>
+            <div class="section-card"><div class="section-title">💊 Traitements en cours</div><div class="table-responsive"><table><thead><tr><th>Médicament</th><th>Dosage</th><th>Fréquence</th></tr></thead><tbody id="treatmentsTableBody"></tbody></table></div></div>`;
+        }
+        
+        function addTreatmentRecord() { 
+            const treatment = { id:Date.now(), nom:document.getElementById('treatmentNom').value, dosage:document.getElementById('treatmentDosage').value, frequence:document.getElementById('treatmentFrequence').value, actif:true }; 
+            appData.traitements.unshift(treatment); 
+            const tbody = document.getElementById('treatmentsTableBody');
+            if(tbody) tbody.innerHTML = appData.traitements.filter(t=>t.actif).map(t=>`<tr><td>${t.nom}</td><td>${t.dosage}</td><td>${t.frequence}</td></tr>`).join('');
+            showPage('treatments'); 
+        }
+
+        // ============ KOBOTOOLBOX ============
+        function renderKobotoolbox() {
+            return `<div class="section-card"><div class="section-title">📋 KOBOTOOLBOX - Plateforme de collecte</div>
+            <div class="stats-grid"><div class="stat-card"><div><h4>Formulaires</h4><div class="stat-value">${kobotoolboxData.forms.length}</div></div></div>
+            <div class="stat-card"><div><h4>Soumissions</h4><div class="stat-value">${kobotoolboxData.collectedData.length}</div></div></div></div>
+            <div class="section-title">📝 Nouvelle soumission</div>
+            <div class="form-row"><div class="form-group"><label>Province</label><select id="koboProvince">${PROVINCES_BURUNDI.map(p=>`<option value="${p}">${p}</option>`).join('')}</select></div>
+            <div class="form-group"><label>Maladie</label><select id="koboMaladie">${MALADIES_LIST.map(m=>`<option>${m}</option>`).join('')}</select></div></div>
+            <button onclick="submitKoboData()">📤 Soumettre au serveur Kobo</button>
+            <div class="section-title">📊 Données collectées</div>
+            <div class="table-responsive" id="koboDataContainer"></div></div>`;
+        }
+
+        function submitKoboData() { 
+            const newData = { id: kobotoolboxData.collectedData.length+1, submissionId: `SUB-${String(kobotoolboxData.collectedData.length+1).padStart(5,'0')}`, province: document.getElementById('koboProvince').value, maladie: document.getElementById('koboMaladie').value, dateCollecte: new Date().toISOString().split('T')[0] }; 
+            kobotoolboxData.collectedData.push(newData); 
+            alert('✅ Données soumises avec succès!'); 
+            filterKoboData(); 
+        }
+        
+        function filterKoboData() { 
+            const container = document.getElementById('koboDataContainer'); 
+            if(container) container.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Date</th><th>Province</th><th>Maladie</th></tr></thead><tbody>${kobotoolboxData.collectedData.slice(0,20).map(d=>`<tr><td>${d.submissionId}</td><td>${d.dateCollecte}</td><td>${d.province}</td><td>${d.maladie}</td></tr>`).join('')}</tbody></table>`; 
+        }
+
+        // ============ RAPPORTS ============
+        function renderReports() {
+            return `<div class="section-card"><div class="section-title">📄 Générateur de rapports avancé</div>
+            <div class="filter-bar"><div class="form-group"><label>Type de rapport</label><select id="reportType"><option value="patients">👥 Patients chroniques</option><option value="kobo">📋 Données KOBOTOOLBOX</option></select></div>
+            <div class="form-group"><label>Province</label><select id="reportProvinceFilter"><option value="">Toutes</option>${PROVINCES_BURUNDI.map(p=>`<option value="${p}">${p}</option>`).join('')}</select></div>
+            <div class="form-group"><button onclick="generateAdvancedReport()" style="margin-top:22px;">🔍 Générer</button></div></div>
+            <div class="export-buttons"><button onclick="exportReportPDF()" class="btn-danger">📄 PDF</button><button onclick="exportReportExcel()" class="btn-success">📊 Excel</button></div></div>
+            <div id="reportResults"></div>`;
+        }
+
+        function generateAdvancedReport() {
+            const type = document.getElementById('reportType').value;
+            const province = document.getElementById('reportProvinceFilter').value;
+            let data = [];
+            if(type === 'patients') { data = patientsMalades.filter(p=>!province || p.province===province); }
+            else if(type === 'kobo') { data = kobotoolboxData.collectedData.filter(d=>!province || d.province===province); }
+            currentReportData = data;
+            let html = `<div class="section-card" id="reportContent"><div class="section-title">📊 Rapport - ${type.toUpperCase()}</div><div class="alert alert-info">Total: ${data.length} enregistrements</div>`;
+            html += `<div class="table-responsive"><table><thead><tr>${type==='patients'?'<th>Nom</th><th>Maladie</th><th>Province</th>':'<th>Date</th><th>Province</th><th>Maladie</th>'}</tr></thead><tbody>`;
+            if(type === 'patients') { data.forEach(d=>{ html+=`<tr><td>${d.prenom} ${d.nom}</td><td>${d.maladie}</td><td>${d.province}</td></tr>`; }); }
+            else { data.forEach(d=>{ html+=`<tr><td>${d.dateCollecte}</td><td>${d.province}</td><td>${d.maladie}</td></tr>`; }); }
+            html += `</tbody></table></div><div style="margin-top:20px;font-size:12px;color:#666;text-align:center;">📋 Rapport généré par MediTrack Burundi le ${new Date().toLocaleString()}</div></div>`;
+            document.getElementById('reportResults').innerHTML = html;
+        }
+        
+        function exportReportPDF() { const element = document.getElementById('reportContent'); if(element) html2pdf().from(element).set({filename:`rapport_${new Date().toISOString().split('T')[0]}.pdf`}).save(); else alert('Générez d\'abord un rapport'); }
+        function exportReportExcel() { if(Array.isArray(currentReportData) && currentReportData.length) { const ws=XLSX.utils.json_to_sheet(currentReportData); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Rapport'); XLSX.writeFile(wb,`rapport_${new Date().toISOString().split('T')[0]}.xlsx`); } else alert('Aucune donnée à exporter'); }
+
+        // ============ AUTRES PAGES ============
+        function renderIoT() { return `<div class="section-card"><div class="section-title">📡 Objets connectés</div><div class="alert alert-info">Gestion des appareils connectés</div></div>`; }
+        function renderTelemedecine() { return `<div class="section-card"><div class="section-title">🎥 Télémédecine</div><div class="alert alert-info">Consultations à distance</div><button>📹 Démarrer consultation</button></div>`; }
+        function renderAppointments() { return `<div class="section-card"><div class="section-title">📅 Rendez-vous</div><div class="alert alert-info">Gestion des rendez-vous médicaux</div><button onclick="alert('Formulaire de prise de RDV')">📆 Prendre RDV</button></div>`; }
+        function renderPredictive() { return `<div class="section-card"><div class="section-title">🤖 Analyse IA prédictive</div><div class="alert alert-info">Prédictions et analyses avancées</div></div>`; }
+        function renderMap() { setTimeout(()=>{ initMap(); getGPSPosition(); },100); return `<div class="section-card"><div class="section-title">🗺️ Carte du Burundi</div><div id="map" style="height:500px;"></div></div>`; }
+        function renderUsers() { return `<div class="section-card"><div class="section-title">👥 Utilisateurs</div><div class="table-responsive"><table><thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Province</th></tr></thead><tbody>${users.map(u=>`<tr><td>${u.nom} ${u.prenom}</td><td>${u.email}</td><td>${u.role}</td><td>${u.province||'N/A'}</td></tr>`).join('')}</tbody></table></div></div>`; }
+        function renderProfile() { return `<div class="section-card"><div class="section-title">⚙️ Mon profil</div><div class="form-group"><label>Nom</label><input type="text" id="profileNom" value="${currentUser.nom}"></div><div class="form-group"><label>Prénom</label><input type="text" id="profilePrenom" value="${currentUser.prenom}"></div><div class="form-group"><label>Email</label><input type="email" id="profileEmail" value="${currentUser.email}"></div><div class="form-group"><label>Téléphone</label><input type="tel" id="profileTel" value="${currentUser.telephone || ''}"></div><button onclick="updateProfile()">💾 Mettre à jour</button></div>`; }
+
+        function updateProfile() {
+            currentUser.nom = document.getElementById('profileNom').value;
+            currentUser.prenom = document.getElementById('profilePrenom').value;
+            currentUser.email = document.getElementById('profileEmail').value;
+            currentUser.telephone = document.getElementById('profileTel').value;
+            const userIndex = users.findIndex(u => u.id === currentUser.id);
+            if (userIndex !== -1) { users[userIndex] = {...currentUser}; }
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            alert('Profil mis à jour avec succès !');
+            showPage('profile');
+        }
+
+        function showPage(page) {
+            document.querySelectorAll('.nav-item').forEach(item=>{item.classList.remove('active'); if(item.dataset.page===page) item.classList.add('active');});
+            const titles={dashboard:'Tableau de bord',patients:'Patients Chroniques',symptoms:'Symptômes',nutrition:'Nutrition',measures:'Mesures',treatments:'Traitements',iot:'Objets Connectés',telemedecine:'Télémédecine',appointments:'Rendez-vous',reports:'Rapports',predictive:'Analyse IA',kobotoolbox:'KOBOTOOLBOX',map:'Carte Burundi',users:'Utilisateurs',profile:'Profil'};
+            document.getElementById('pageTitle').innerText=titles[page]||page;
+            const contentDiv=document.getElementById('pageContent');
+            switch(page){
+                case 'dashboard': contentDiv.innerHTML=renderDashboard(); setTimeout(()=>{ const ctx=document.getElementById('provinceChart')?.getContext('2d'); if(ctx) new Chart(ctx,{type:'bar',data:{labels:PROVINCES_BURUNDI,datasets:[{label:'Patients',data:PROVINCES_BURUNDI.map(p=>patientsMalades.filter(pat=>pat.province===p).length),backgroundColor:'#667eea'}]}}); },100); break;
+                case 'patients': contentDiv.innerHTML=renderPatients(); setTimeout(filterPatients,100); break;
+                case 'symptoms': contentDiv.innerHTML=renderSymptoms(); setTimeout(()=>{ const tbody=document.getElementById('symptomsTableBody'); if(tbody) tbody.innerHTML = appData.symptomes.map(s=>`<tr><td>${s.date}</td><td>${s.symptomes.join(', ')}</td><td>${s.intensite}/10</td></tr>`).join(''); },100); break;
+                case 'nutrition': contentDiv.innerHTML=renderNutrition(); setTimeout(()=>{ const tbody=document.getElementById('mealsTableBody'); if(tbody) tbody.innerHTML = appData.repas.map(m=>`<tr><td>${m.date}</td><td>${m.type}</td><td>${m.aliments}</td></tr>`).join(''); },100); break;
+                case 'measures': contentDiv.innerHTML=renderMeasures(); setTimeout(()=>{ const tbody=document.getElementById('measuresTableBody'); if(tbody) tbody.innerHTML = appData.mesures.map(m=>`<tr><td>${m.date}</td><td>${m.tension_systolique}/${m.tension_diastolique}</td><td>${m.glycemie}</td></tr>`).join(''); },100); break;
+                case 'treatments': contentDiv.innerHTML=renderTreatments(); setTimeout(()=>{ const tbody=document.getElementById('treatmentsTableBody'); if(tbody) tbody.innerHTML = appData.traitements.filter(t=>t.actif).map(t=>`<tr><td>${t.nom}</td><td>${t.dosage}</td><td>${t.frequence}</td></tr>`).join(''); },100); break;
+                case 'iot': contentDiv.innerHTML=renderIoT(); break;
+                case 'telemedecine': contentDiv.innerHTML=renderTelemedecine(); break;
+                case 'appointments': contentDiv.innerHTML=renderAppointments(); break;
+                case 'reports': contentDiv.innerHTML=renderReports(); break;
+                case 'predictive': contentDiv.innerHTML=renderPredictive(); break;
+                case 'kobotoolbox': contentDiv.innerHTML=renderKobotoolbox(); setTimeout(filterKoboData,100); break;
+                case 'map': contentDiv.innerHTML=renderMap(); break;
+                case 'users': contentDiv.innerHTML=renderUsers(); break;
+                case 'profile': contentDiv.innerHTML=renderProfile(); break;
+                default: contentDiv.innerHTML=renderDashboard();
+            }
+            if(window.innerWidth<=768 && document.getElementById('sidebar')) document.getElementById('sidebar').classList.remove('open');
+        }
+
+        // Expositions globales
+        window.toggleSidebar = () => document.getElementById('sidebar')?.classList.toggle('open');
+        window.showPage = showPage; window.logout = logout; window.getGPSPosition = getGPSPosition; window.filterByProvince = filterByProvince;
+        window.generateAdvancedReport = generateAdvancedReport; window.exportReportPDF = exportReportPDF; window.exportReportExcel = exportReportExcel;
+        window.filterPatients = filterPatients; window.toggleSymptom = toggleSymptom; window.addSymptomRecord = addSymptomRecord;
+        window.addMealRecord = addMealRecord; window.addMeasureRecord = addMeasureRecord; window.addTreatmentRecord = addTreatmentRecord;
+        window.showAddPatientModal = showAddPatientModal; window.addPatient = addPatient; window.deletePatient = deletePatient;
+        window.editPatient = editPatient; window.closeModal = closeModal; window.submitKoboData = submitKoboData;
+        window.filterKoboData = filterKoboData; window.updateProfile = updateProfile;
+
+        initApp();
+    </script>
+</body>
+</html>
